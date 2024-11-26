@@ -2,7 +2,7 @@
 
 
 # 🎵 YouTube Downloader 🎧  
-Convert your favorite YouTube videos into high-quality MP3s with lightning speed! 🚀 Built with ❤️ using [Python](https://www.python.org), [Streamlit](https://streamlit.io), and the amazing [yt-dlp](https://github.com/yt-dlp/yt-dlp) library.
+Convert your favorite YouTube videos into high-quality MP3s MP4s with lightning speed! 🚀 Built with ❤️ using [Python](https://www.python.org), [Streamlit](https://streamlit.io), and the amazing [yt-dlp](https://github.com/yt-dlp/yt-dlp) library.
 
 ---
 
