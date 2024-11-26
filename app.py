@@ -1,117 +1,92 @@
+import instaloader
 import streamlit as st
-from yt_dlp import YoutubeDL
-import zipfile
+import requests
 import os
-import tempfile
 
-def download_content(url, download_type, is_playlist=False):
+def download_instagram_video(post, file_path):
     """
-    Download audio or video based on user selection.
+    Download Instagram video from a Post object.
 
     Args:
-        url (str): YouTube URL.
-        download_type (str): 'mp3' for audio, 'mp4' for video.
-        is_playlist (bool): True if the URL is a playlist.
+        post (instaloader.Post): The Instagram Post object.
+        file_path (str): Path to save the video file.
 
     Returns:
-        list: List of downloaded file paths.
+        str: Path to the downloaded video.
     """
-    ydl_opts = {
-        'format': 'bestaudio/best' if download_type == 'mp3' else 'best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }] if download_type == 'mp3' else [],
-        'outtmpl': '%(title)s.%(ext)s',
-    }
+    video_url = post.video_url
+    response = requests.get(video_url, stream=True)
+    with open(file_path, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+    return file_path
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        ydl_opts['outtmpl'] = os.path.join(tmp_dir, '%(title)s.%(ext)s')
-        with YoutubeDL(ydl_opts) as ydl:
-            if is_playlist:
-                info_list = ydl.extract_info(url, download=True)
-                downloaded_files = [
-                    os.path.join(tmp_dir, f"{entry['title']}.{download_type}")
-                    for entry in info_list['entries']
-                ]
-            else:
-                info = ydl.extract_info(url, download=True)
-                downloaded_files = [
-                    os.path.join(tmp_dir, f"{info['title']}.{download_type}")
-                ]
-            return downloaded_files
-
-def create_zip(file_list):
+def extract_audio(video_path, audio_path):
     """
-    Create a ZIP file containing the provided files.
+    Convert a video file to an audio file.
 
     Args:
-        file_list (list): List of file paths to include in the ZIP.
+        video_path (str): Path to the video file.
+        audio_path (str): Path to save the audio file.
 
     Returns:
-        bytes: ZIP file content.
+        str: Path to the extracted audio file.
     """
-    with tempfile.NamedTemporaryFile(delete=False) as tmp_zip:
-        with zipfile.ZipFile(tmp_zip.name, 'w') as zipf:
-            for file in file_list:
-                zipf.write(file, os.path.basename(file))
-        with open(tmp_zip.name, 'rb') as zipf:
-            return zipf.read()
+    os.system(f"ffmpeg -i \"{video_path}\" -q:a 0 -map a \"{audio_path}\" -y")
+    return audio_path
 
 def main():
-    st.title("🎵 YouTube to MP3/MP4 Fast 🎬")
-    st.write("Download your favorite YouTube videos or playlists as MP3 (audio) or MP4 (video) with ease!")
+    st.title("📸 Instagram Video & Audio Downloader 🎥")
+    st.write("Download videos or extract audio from Instagram posts effortlessly!")
 
     # Format selection
     format_option = st.radio(
         "Choose the format you want to download:",
-        ("MP3 (Audio)", "MP4 (Video)"),
+        ("MP4 (Video)", "MP3 (Audio)"),
         horizontal=True
     )
-    download_type = 'mp3' if format_option == "MP3 (Audio)" else 'mp4'
+    download_type = 'video' if format_option == "MP4 (Video)" else 'audio'
 
-    # Video or Playlist selection
-    option = st.radio(
-        "What would you like to download?",
-        ("Single Video", "Playlist"),
-        horizontal=True
-    )
-    is_playlist = (option == "Playlist")
-
-    # URL input
-    url = st.text_input("Enter YouTube URL:")
+    # URL input for Instagram
+    url = st.text_input("Enter Instagram Post URL:")
 
     if st.button("Download"):
-        if url.strip() == "":
-            st.error("Please enter a valid YouTube URL.")
+        if not url.strip():
+            st.error("Please enter a valid Instagram URL.")
         else:
             try:
-                st.info(f"Downloading... Please wait! {'(Playlist Mode)' if is_playlist else ''}")
-                downloaded_files = download_content(url, download_type, is_playlist=is_playlist)
+                st.info("Processing... Please wait!")
+                loader = instaloader.Instaloader(dirname_pattern='downloads', filename_pattern="{shortcode}")
+                shortcode = url.split("/")[-2]  # Extract shortcode
+                post = instaloader.Post.from_shortcode(loader.context, shortcode)
 
-                if is_playlist:
-                    st.success(f"Playlist downloaded! Total files: {len(downloaded_files)}")
-                    zip_content = create_zip(downloaded_files)
-                    st.download_button(
-                        label="Download All as ZIP",
-                        data=zip_content,
-                        file_name="playlist_download.zip",
-                        mime="application/zip"
-                    )
-                else:
-                    file_name = os.path.basename(downloaded_files[0])
-                    with open(downloaded_files[0], "rb") as file:
-                        st.success(f"Video downloaded: {file_name}")
+                video_path = f"downloads/{shortcode}.mp4"
+                download_instagram_video(post, video_path)
+
+                if download_type == 'video':
+                    st.success("Video is ready for download! 🎉")
+                    with open(video_path, "rb") as video_file:
                         st.download_button(
-                            label="Download",
-                            data=file,
-                            file_name=file_name,
-                            mime="audio/mpeg" if download_type == "mp3" else "video/mp4"
+                            label="⬇️ Download Video",
+                            data=video_file,
+                            file_name=f"{shortcode}.mp4",
+                            mime="video/mp4"
+                        )
+                else:
+                    audio_path = f"downloads/{shortcode}.mp3"
+                    extract_audio(video_path, audio_path)
+                    st.success("Audio is ready for download! 🎉")
+                    with open(audio_path, "rb") as audio_file:
+                        st.download_button(
+                            label="🎵 Download Audio",
+                            data=audio_file,
+                            file_name=f"{shortcode}.mp3",
+                            mime="audio/mpeg"
                         )
 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
+    os.makedirs("downloads", exist_ok=True)  # Ensure downloads folder exists
     main()
