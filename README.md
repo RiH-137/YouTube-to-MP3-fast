@@ -1,10 +1,11 @@
-# 🎵 YouTube to MP3 Fast 🎧  
+# 🎵 YouTube Downloader 🎧  
 Convert your favorite YouTube videos into high-quality MP3s with lightning speed! 🚀 Built with ❤️ using [Python](https://www.python.org), [Streamlit](https://streamlit.io), and the amazing [yt-dlp](https://github.com/yt-dlp/yt-dlp) library.
 
 ---
 
 ## 🌟 Features  
-- 🎶 **Fast and Efficient** MP3 downloads.  
+-  ⏩ **Just Wow**, Able to download a single video and a complete playlist.
+- 🎶 **Fast and Efficient** MP3/MP4 downloads.  
 - 📱 **User-friendly Interface** with Streamlit.  
 - ⚡ **No Fuss**, just paste a link and download!  
 
