@@ -1,111 +1,109 @@
+import yt_dlp
 import streamlit as st
-from yt_dlp import YoutubeDL
-import zipfile
 import os
+import zipfile
 
-def download_content(url, download_type, is_playlist=False):
+def download_video(video_url, format_type, output_folder):
     """
-    Download audio or video based on user selection.
+    Downloads video or audio from YouTube using yt-dlp.
 
     Args:
-        url (str): YouTube URL.
-        download_type (str): 'mp3' for audio, 'mp4' for video.
-        is_playlist (bool): True if the URL is a playlist.
+        video_url (str): The URL of the YouTube video.
+        format_type (str): 'audio' for MP3 or 'video' for MP4.
+        output_folder (str): Path to the output folder for downloads.
 
     Returns:
-        list: List of downloaded file paths.
+        str: Path to the downloaded file.
     """
+    file_template = f"{output_folder}/%(title)s.{'mp3' if format_type == 'audio' else 'mp4'}"
+
     ydl_opts = {
-        'format': 'bestaudio/best' if download_type == 'mp3' else 'best',
+        'format': 'bestaudio/best' if format_type == 'audio' else 'best',
+        'outtmpl': file_template,
+        'noplaylist': True,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
-        }] if download_type == 'mp3' else [],
-        'outtmpl': '%(title)s.%(ext)s',
+        }] if format_type == 'audio' else [],
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
     }
 
-    with YoutubeDL(ydl_opts) as ydl:
-        if is_playlist:
-            info_list = ydl.extract_info(url, download=True)
-            downloaded_files = [
-                ydl.prepare_filename(entry).replace('.webm', f'.{download_type}')
-                for entry in info_list['entries']
-            ]
-            return downloaded_files
-        else:
-            info = ydl.extract_info(url, download=True)
-            return [ydl.prepare_filename(info).replace('.webm', f'.{download_type}')]
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(video_url, download=True)
+        downloaded_file = ydl.prepare_filename(info)
+        if format_type == 'audio':
+            downloaded_file = downloaded_file.replace(".webm", ".mp3").replace(".m4a", ".mp3")
+        return downloaded_file
 
-def create_zip(file_list, zip_name):
+def create_zip(output_folder, zip_file_name):
     """
-    Create a ZIP file containing the provided files.
+    Compresses all files in the output folder into a ZIP file.
 
     Args:
-        file_list (list): List of file paths to include in the ZIP.
-        zip_name (str): Name of the ZIP file.
+        output_folder (str): Path to the folder containing downloaded files.
+        zip_file_name (str): Name of the resulting ZIP file.
 
     Returns:
-        str: Path to the ZIP file.
+        str: Path to the created ZIP file.
     """
-    with zipfile.ZipFile(zip_name, 'w') as zipf:
-        for file in file_list:
-            zipf.write(file, os.path.basename(file))
-    return zip_name
+    zip_path = f"{output_folder}/{zip_file_name}"
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        for root, _, files in os.walk(output_folder):
+            for file in files:
+                if file.endswith(".mp3") or file.endswith(".mp4"):
+                    zipf.write(os.path.join(root, file), arcname=file)
+    return zip_path
 
 def main():
-    st.title("🎵 YouTube to MP3/MP4 Fast 🎬")
-    st.write("Download your favorite YouTube videos or playlists as MP3 (audio) or MP4 (video) with ease!")
+    st.title("🎬 YouTube Video & Audio Downloader 📥")
+    st.write("Download videos or extract audio from YouTube links effortlessly!")
+
+    # Input field for the YouTube URL
+    video_url = st.text_input("Enter YouTube Video URL:")
 
     # Format selection
-    format_option = st.radio(
+    format_type = st.radio(
         "Choose the format you want to download:",
-        ("MP3 (Audio)", "MP4 (Video)"),
+        ("MP4 (Video)", "MP3 (Audio)"),
         horizontal=True
     )
-    download_type = 'mp3' if format_option == "MP3 (Audio)" else 'mp4'
+    selected_format = 'video' if format_type == "MP4 (Video)" else 'audio'
 
-    # Video or Playlist selection
-    option = st.radio(
-        "What would you like to download?",
-        ("Single Video", "Playlist"),
-        horizontal=True
-    )
-    is_playlist = (option == "Playlist")
-
-    # URL input
-    url = st.text_input("Enter YouTube URL:")
+    # Prepare output folder
+    output_folder = "downloads"
+    os.makedirs(output_folder, exist_ok=True)
 
     if st.button("Download"):
-        if url.strip() == "":
+        if not video_url.strip():
             st.error("Please enter a valid YouTube URL.")
         else:
             try:
-                st.info(f"Downloading... Please wait! {'(Playlist Mode)' if is_playlist else ''}")
-                downloaded_files = download_content(url, download_type, is_playlist=is_playlist)
+                st.info("Processing... Please wait!")
+                downloaded_file = download_video(video_url, selected_format, output_folder)
+                st.success(f"Download ready! 🎉 File: {downloaded_file}")
 
-                if is_playlist:
-                    zip_name = "playlist_download.zip"
-                    zip_path = create_zip(downloaded_files, zip_name)
+                # Provide single file download button
+                with open(downloaded_file, "rb") as file:
+                    st.download_button(
+                        label="⬇️ Download File",
+                        data=file,
+                        file_name=os.path.basename(downloaded_file),
+                        mime="audio/mpeg" if selected_format == 'audio' else "video/mp4"
+                    )
 
-                    st.success(f"Playlist downloaded! Total files: {len(downloaded_files)}")
-                    with open(zip_path, "rb") as zipf:
-                        st.download_button(
-                            label="Download All as ZIP",
-                            data=zipf,
-                            file_name=zip_name,
-                            mime="application/zip"
-                        )
-                else:
-                    file_name = downloaded_files[0]
-                    st.success(f"Video downloaded: {file_name}")
-                    with open(file_name, "rb") as file:
-                        st.download_button(
-                            label="Download",
-                            data=file,
-                            file_name=file_name,
-                            mime="audio/mpeg" if download_type == "mp3" else "video/mp4"
-                        )
+                # Create ZIP if multiple files exist
+                zip_file_name = "downloaded_files.zip"
+                zip_path = create_zip(output_folder, zip_file_name)
+                with open(zip_path, "rb") as zip_file:
+                    st.download_button(
+                        label="⬇️ Download All Files as ZIP",
+                        data=zip_file,
+                        file_name=zip_file_name,
+                        mime="application/zip"
+                    )
 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
