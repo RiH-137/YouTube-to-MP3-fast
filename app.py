@@ -2,6 +2,7 @@ import streamlit as st
 from yt_dlp import YoutubeDL
 import zipfile
 import os
+import tempfile
 
 def download_content(url, download_type, is_playlist=False):
     """
@@ -25,33 +26,38 @@ def download_content(url, download_type, is_playlist=False):
         'outtmpl': '%(title)s.%(ext)s',
     }
 
-    with YoutubeDL(ydl_opts) as ydl:
-        if is_playlist:
-            info_list = ydl.extract_info(url, download=True)
-            downloaded_files = [
-                ydl.prepare_filename(entry).replace('.webm', f'.{download_type}')
-                for entry in info_list['entries']
-            ]
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        ydl_opts['outtmpl'] = os.path.join(tmp_dir, '%(title)s.%(ext)s')
+        with YoutubeDL(ydl_opts) as ydl:
+            if is_playlist:
+                info_list = ydl.extract_info(url, download=True)
+                downloaded_files = [
+                    os.path.join(tmp_dir, f"{entry['title']}.{download_type}")
+                    for entry in info_list['entries']
+                ]
+            else:
+                info = ydl.extract_info(url, download=True)
+                downloaded_files = [
+                    os.path.join(tmp_dir, f"{info['title']}.{download_type}")
+                ]
             return downloaded_files
-        else:
-            info = ydl.extract_info(url, download=True)
-            return [ydl.prepare_filename(info).replace('.webm', f'.{download_type}')]
 
-def create_zip(file_list, zip_name):
+def create_zip(file_list):
     """
     Create a ZIP file containing the provided files.
 
     Args:
         file_list (list): List of file paths to include in the ZIP.
-        zip_name (str): Name of the ZIP file.
 
     Returns:
-        str: Path to the ZIP file.
+        bytes: ZIP file content.
     """
-    with zipfile.ZipFile(zip_name, 'w') as zipf:
-        for file in file_list:
-            zipf.write(file, os.path.basename(file))
-    return zip_name
+    with tempfile.NamedTemporaryFile(delete=False) as tmp_zip:
+        with zipfile.ZipFile(tmp_zip.name, 'w') as zipf:
+            for file in file_list:
+                zipf.write(file, os.path.basename(file))
+        with open(tmp_zip.name, 'rb') as zipf:
+            return zipf.read()
 
 def main():
     st.title("🎵 YouTube to MP3/MP4 Fast 🎬")
@@ -85,21 +91,18 @@ def main():
                 downloaded_files = download_content(url, download_type, is_playlist=is_playlist)
 
                 if is_playlist:
-                    zip_name = "playlist_download.zip"
-                    zip_path = create_zip(downloaded_files, zip_name)
-
                     st.success(f"Playlist downloaded! Total files: {len(downloaded_files)}")
-                    with open(zip_path, "rb") as zipf:
-                        st.download_button(
-                            label="Download All as ZIP",
-                            data=zipf,
-                            file_name=zip_name,
-                            mime="application/zip"
-                        )
+                    zip_content = create_zip(downloaded_files)
+                    st.download_button(
+                        label="Download All as ZIP",
+                        data=zip_content,
+                        file_name="playlist_download.zip",
+                        mime="application/zip"
+                    )
                 else:
-                    file_name = downloaded_files[0]
-                    st.success(f"Video downloaded: {file_name}")
-                    with open(file_name, "rb") as file:
+                    file_name = os.path.basename(downloaded_files[0])
+                    with open(downloaded_files[0], "rb") as file:
+                        st.success(f"Video downloaded: {file_name}")
                         st.download_button(
                             label="Download",
                             data=file,
