@@ -2,7 +2,19 @@ import streamlit as st
 from yt_dlp import YoutubeDL
 import zipfile
 import os
-import tempfile
+import re
+
+
+def sanitize_filename(filename):
+    """
+    Sanitize the filename by removing invalid characters.
+    Args:
+        filename (str): Original filename.
+    Returns:
+        str: Sanitized filename.
+    """
+    return re.sub(r'[<>:"/\\|?*]', '_', filename)
+
 
 def download_content(url, download_type, is_playlist=False):
     """
@@ -16,31 +28,32 @@ def download_content(url, download_type, is_playlist=False):
     Returns:
         list: List of downloaded file paths.
     """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        ydl_opts = {
-            'format': 'bestaudio/best' if download_type == 'mp3' else 'best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }] if download_type == 'mp3' else [],
-            'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            },
-        }
+    ydl_opts = {
+        'format': 'bestaudio/best' if download_type == 'mp3' else 'best',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }] if download_type == 'mp3' else [],
+        'outtmpl': '%(title)s.%(ext)s',  # Save to current working directory
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+    }
 
-        with YoutubeDL(ydl_opts) as ydl:
-            if is_playlist:
-                info_list = ydl.extract_info(url, download=True)
-                downloaded_files = [
-                    ydl.prepare_filename(entry).replace('.webm', f'.{download_type}')
-                    for entry in info_list['entries']
-                ]
-                return downloaded_files
-            else:
-                info = ydl.extract_info(url, download=True)
-                return [ydl.prepare_filename(info).replace('.webm', f'.{download_type}')]
+    with YoutubeDL(ydl_opts) as ydl:
+        if is_playlist:
+            info_list = ydl.extract_info(url, download=True)
+            downloaded_files = [
+                sanitize_filename(ydl.prepare_filename(entry)).replace('.webm', f'.{download_type}')
+                for entry in info_list['entries']
+            ]
+            return downloaded_files
+        else:
+            info = ydl.extract_info(url, download=True)
+            downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
+            return [downloaded_file]
+
 
 def create_zip(file_list, zip_name):
     """
@@ -53,13 +66,12 @@ def create_zip(file_list, zip_name):
     Returns:
         str: Path to the ZIP file.
     """
-    zip_path = os.path.join(tempfile.gettempdir(), zip_name)
+    zip_path = os.path.join(os.getcwd(), zip_name)
     with zipfile.ZipFile(zip_path, 'w') as zipf:
         for file in file_list:
             zipf.write(file, os.path.basename(file))
-    for file in file_list:
-        os.remove(file)  # Clean up individual files
     return zip_path
+
 
 def main():
     st.title("🎵 YouTube to MP3/MP4 Fast 🎬")
@@ -117,6 +129,7 @@ def main():
 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
+
 
 if __name__ == "__main__":
     main()
