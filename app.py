@@ -1,5 +1,7 @@
 import streamlit as st
 from yt_dlp import YoutubeDL
+import zipfile
+import os
 
 def download_content(url, download_type, is_playlist=False):
     """
@@ -35,6 +37,22 @@ def download_content(url, download_type, is_playlist=False):
             info = ydl.extract_info(url, download=True)
             return [ydl.prepare_filename(info).replace('.webm', f'.{download_type}')]
 
+def create_zip(file_list, zip_name):
+    """
+    Create a ZIP file containing the provided files.
+
+    Args:
+        file_list (list): List of file paths to include in the ZIP.
+        zip_name (str): Name of the ZIP file.
+
+    Returns:
+        str: Path to the ZIP file.
+    """
+    with zipfile.ZipFile(zip_name, 'w') as zipf:
+        for file in file_list:
+            zipf.write(file, os.path.basename(file))
+    return zip_name
+
 def main():
     st.title("🎵 YouTube to MP3/MP4 Fast 🎬")
     st.write("Download your favorite YouTube videos or playlists as MP3 (audio) or MP4 (video) with ease!")
@@ -67,15 +85,17 @@ def main():
                 downloaded_files = download_content(url, download_type, is_playlist=is_playlist)
 
                 if is_playlist:
+                    zip_name = "playlist_download.zip"
+                    zip_path = create_zip(downloaded_files, zip_name)
+
                     st.success(f"Playlist downloaded! Total files: {len(downloaded_files)}")
-                    for file_name in downloaded_files:
-                        with open(file_name, "rb") as file:
-                            st.download_button(
-                                label=f"Download {file_name}",
-                                data=file,
-                                file_name=file_name,
-                                mime="audio/mpeg" if download_type == "mp3" else "video/mp4"
-                            )
+                    with open(zip_path, "rb") as zipf:
+                        st.download_button(
+                            label="Download All as ZIP",
+                            data=zipf,
+                            file_name=zip_name,
+                            mime="application/zip"
+                        )
                 else:
                     file_name = downloaded_files[0]
                     st.success(f"Video downloaded: {file_name}")
