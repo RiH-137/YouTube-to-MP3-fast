@@ -39,6 +39,7 @@ def download_content(url, download_type, is_playlist=False):
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
+        'noplaylist': not is_playlist,  # Disable playlist processing for single videos
     }
 
     downloaded_files = []
@@ -47,22 +48,26 @@ def download_content(url, download_type, is_playlist=False):
         if is_playlist:
             info_list = ydl.extract_info(url, download=False)
             for entry in info_list['entries']:
+                if entry is None:  # Skip if the entry is None
+                    continue
                 try:
-                    if entry:  # Check if entry is valid
-                        video_url = entry.get('url', None)
-                        if not video_url:
-                            raise ValueError("Missing video URL in playlist entry.")
+                    video_url = entry.get('url', None)
+                    if not video_url:
+                        raise ValueError("Missing video URL in playlist entry.")
 
-                        info = ydl.extract_info(video_url, download=True)
-                        downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
-                        downloaded_files.append(downloaded_file)
-                        st.success(f"Downloaded: {entry.get('title', 'Unknown Title')}")
+                    info = ydl.extract_info(video_url, download=True)
+                    downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
+                    downloaded_files.append(downloaded_file)
+                    st.success(f"Downloaded: {entry.get('title', 'Unknown Title')}")
                 except Exception as e:
                     st.warning(f"Skipping {entry.get('title', 'Unknown Title')} due to error: {e}")
         else:
-            info = ydl.extract_info(url, download=True)
-            downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
-            downloaded_files.append(downloaded_file)
+            try:
+                info = ydl.extract_info(url, download=True)
+                downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
+                downloaded_files.append(downloaded_file)
+            except Exception as e:
+                st.error(f"Failed to download video. Error: {e}")
 
     return downloaded_files
 
@@ -132,15 +137,18 @@ def main():
                     else:
                         st.warning("No files were successfully downloaded from the playlist.")
                 else:
-                    file_name = downloaded_files[0]
-                    st.success(f"Video downloaded: {file_name}")
-                    with open(file_name, "rb") as file:
-                        st.download_button(
-                            label="Download",
-                            data=file,
-                            file_name=file_name,
-                            mime="audio/mpeg" if download_type == "mp3" else "video/mp4"
-                        )
+                    if downloaded_files:
+                        file_name = downloaded_files[0]
+                        st.success(f"Video downloaded: {file_name}")
+                        with open(file_name, "rb") as file:
+                            st.download_button(
+                                label="Download",
+                                data=file,
+                                file_name=file_name,
+                                mime="audio/mpeg" if download_type == "mp3" else "video/mp4"
+                            )
+                    else:
+                        st.warning("Failed to download the video.")
 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
