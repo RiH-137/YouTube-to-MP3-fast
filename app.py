@@ -26,7 +26,7 @@ def download_content(url, download_type, is_playlist=False):
         is_playlist (bool): True if the URL is a playlist.
 
     Returns:
-        list: List of downloaded file paths.
+        list: List of successfully downloaded file paths.
     """
     ydl_opts = {
         'format': 'bestaudio/best' if download_type == 'mp3' else 'best',
@@ -41,18 +41,24 @@ def download_content(url, download_type, is_playlist=False):
         },
     }
 
+    downloaded_files = []
+
     with YoutubeDL(ydl_opts) as ydl:
         if is_playlist:
-            info_list = ydl.extract_info(url, download=True)
-            downloaded_files = [
-                sanitize_filename(ydl.prepare_filename(entry)).replace('.webm', f'.{download_type}')
-                for entry in info_list['entries']
-            ]
-            return downloaded_files
+            info_list = ydl.extract_info(url, download=False)
+            for entry in info_list['entries']:
+                try:
+                    info = ydl.extract_info(entry['url'], download=True)
+                    downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
+                    downloaded_files.append(downloaded_file)
+                except Exception as e:
+                    st.warning(f"Skipping {entry.get('title', 'Unknown Title')} due to error: {e}")
         else:
             info = ydl.extract_info(url, download=True)
             downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
-            return [downloaded_file]
+            downloaded_files.append(downloaded_file)
+
+    return downloaded_files
 
 
 def create_zip(file_list, zip_name):
@@ -105,17 +111,20 @@ def main():
                     downloaded_files = download_content(url, download_type, is_playlist=is_playlist)
 
                 if is_playlist:
-                    zip_name = "playlist_download.zip"
-                    zip_path = create_zip(downloaded_files, zip_name)
+                    if downloaded_files:
+                        zip_name = "playlist_download.zip"
+                        zip_path = create_zip(downloaded_files, zip_name)
 
-                    st.success(f"Playlist downloaded! Total files: {len(downloaded_files)}")
-                    with open(zip_path, "rb") as zipf:
-                        st.download_button(
-                            label="Download All as ZIP",
-                            data=zipf,
-                            file_name=zip_name,
-                            mime="application/zip"
-                        )
+                        st.success(f"Playlist downloaded! Total files: {len(downloaded_files)}")
+                        with open(zip_path, "rb") as zipf:
+                            st.download_button(
+                                label="Download All as ZIP",
+                                data=zipf,
+                                file_name=zip_name,
+                                mime="application/zip"
+                            )
+                    else:
+                        st.warning("No files were successfully downloaded from the playlist.")
                 else:
                     file_name = downloaded_files[0]
                     st.success(f"Video downloaded: {file_name}")
