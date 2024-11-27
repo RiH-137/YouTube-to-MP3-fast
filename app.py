@@ -46,21 +46,21 @@ def download_content(url, download_type, is_playlist=False):
 
     with YoutubeDL(ydl_opts) as ydl:
         if is_playlist:
-            info_list = ydl.extract_info(url, download=False)
-            for entry in info_list['entries']:
-                if entry is None:  # Skip if the entry is None
-                    continue
-                try:
-                    video_url = entry.get('url', None)
-                    if not video_url:
-                        raise ValueError("Missing video URL in playlist entry.")
-
-                    info = ydl.extract_info(video_url, download=True)
-                    downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
-                    downloaded_files.append(downloaded_file)
-                    st.success(f"Downloaded: {entry.get('title', 'Unknown Title')}")
-                except Exception as e:
-                    st.warning(f"Skipping {entry.get('title', 'Unknown Title')} due to error: {e}")
+            try:
+                info_list = ydl.extract_info(url, download=False)
+                for entry in info_list['entries']:
+                    if entry is None:  # Skip invalid or empty entries
+                        continue
+                    try:
+                        video_url = f"https://www.youtube.com/watch?v={entry['id']}"
+                        info = ydl.extract_info(video_url, download=True)
+                        downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
+                        downloaded_files.append(downloaded_file)
+                        st.success(f"Downloaded: {entry.get('title', 'Unknown Title')}")
+                    except Exception as e:
+                        st.warning(f"Skipping {entry.get('title', 'Unknown Title')} due to error: {e}")
+            except Exception as e:
+                st.error(f"Failed to process the playlist. Error: {e}")
         else:
             try:
                 info = ydl.extract_info(url, download=True)
