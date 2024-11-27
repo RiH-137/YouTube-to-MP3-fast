@@ -48,9 +48,15 @@ def download_content(url, download_type, is_playlist=False):
             info_list = ydl.extract_info(url, download=False)
             for entry in info_list['entries']:
                 try:
-                    info = ydl.extract_info(entry['url'], download=True)
-                    downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
-                    downloaded_files.append(downloaded_file)
+                    if entry:  # Check if entry is valid
+                        video_url = entry.get('url', None)
+                        if not video_url:
+                            raise ValueError("Missing video URL in playlist entry.")
+
+                        info = ydl.extract_info(video_url, download=True)
+                        downloaded_file = sanitize_filename(ydl.prepare_filename(info)).replace('.webm', f'.{download_type}')
+                        downloaded_files.append(downloaded_file)
+                        st.success(f"Downloaded: {entry.get('title', 'Unknown Title')}")
                 except Exception as e:
                     st.warning(f"Skipping {entry.get('title', 'Unknown Title')} due to error: {e}")
         else:
